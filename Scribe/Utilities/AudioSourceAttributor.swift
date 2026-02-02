@@ -68,6 +68,8 @@ struct AudioSourceAttributor {
     }
 
     /// Attribute segments to sources based on energy comparison
+    /// For mic-attributed segments, uses micSpeakerName
+    /// For system-attributed segments, preserves the API's speaker label (e.g., "Speaker A", "Speaker B")
     func attributeSegments(
         segments: [TranscriptionSegment],
         micEnergyLevels: [(time: Double, energy: Float)],
@@ -86,17 +88,26 @@ struct AudioSourceAttributor {
                 endTime: segment.end
             )
 
-            // Attribute to whichever source has higher energy
-            // Use a ratio threshold to handle cases where both have some energy
-            let speaker: String
+            // Determine if this segment came from mic or system audio
+            let isMicSource: Bool
             if micEnergy > sysEnergy * 1.5 {
-                speaker = micSpeakerName
+                isMicSource = true
             } else if sysEnergy > micEnergy * 1.5 {
-                speaker = "Speaker"
+                isMicSource = false
             } else if micEnergy > sysEnergy {
+                isMicSource = true
+            } else {
+                isMicSource = false
+            }
+
+            // For mic: use the configured speaker name
+            // For system: preserve the API's diarized speaker label, or fallback to "Speaker"
+            let speaker: String
+            if isMicSource {
                 speaker = micSpeakerName
             } else {
-                speaker = "Speaker"
+                // Keep the API's speaker label (e.g., "Speaker A") for multi-speaker diarization
+                speaker = segment.speaker ?? "Speaker"
             }
 
             return TranscriptionSegment(

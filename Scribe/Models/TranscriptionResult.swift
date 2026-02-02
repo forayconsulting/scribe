@@ -5,24 +5,19 @@ struct TranscriptionResult: Codable {
     let segments: [TranscriptionSegment]
     let language: String?
 
+    /// Response format for diarized_json from gpt-4o-transcribe-diarize
     struct APIResponse: Codable {
         let text: String
         let segments: [APISegment]?
         let language: String?
-        let words: [APIWord]?
     }
 
+    /// Diarized segment with speaker label
     struct APISegment: Codable {
-        let id: Int
+        let id: String?
         let start: Double
         let end: Double
         let text: String
-    }
-
-    struct APIWord: Codable {
-        let word: String
-        let start: Double
-        let end: Double
         let speaker: String?
     }
 
@@ -31,28 +26,21 @@ struct TranscriptionResult: Codable {
         self.language = response.language
 
         if let apiSegments = response.segments {
-            var speakerMap: [Int: String] = [:]
-
-            if let words = response.words {
-                for word in words where word.speaker != nil {
-                    for (index, segment) in apiSegments.enumerated() {
-                        if word.start >= segment.start && word.start < segment.end {
-                            if speakerMap[index] == nil {
-                                speakerMap[index] = word.speaker
-                            }
-                            break
-                        }
-                    }
-                }
-            }
-
             self.segments = apiSegments.enumerated().map { index, segment in
-                TranscriptionSegment(
-                    id: segment.id,
+                // Map speaker labels: "A" -> "Speaker A", "B" -> "Speaker B", etc.
+                let speakerLabel: String?
+                if let speaker = segment.speaker {
+                    speakerLabel = "Speaker \(speaker)"
+                } else {
+                    speakerLabel = nil
+                }
+
+                return TranscriptionSegment(
+                    id: index,
                     start: segment.start,
                     end: segment.end,
                     text: segment.text.trimmingCharacters(in: .whitespaces),
-                    speaker: speakerMap[index]
+                    speaker: speakerLabel
                 )
             }
         } else {

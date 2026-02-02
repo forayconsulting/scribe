@@ -5,8 +5,8 @@ A simple macOS app for recording meetings and getting speaker-diarized transcrip
 ## Features
 
 - **Dual audio capture**: Records both system audio (via ScreenCaptureKit) and microphone simultaneously
-- **Energy-based speaker attribution**: Merges audio tracks for high-quality transcription, then attributes each segment to mic or system based on audio energy analysis
-- **OpenAI transcription**: Uses `whisper-1` with `verbose_json` for accurate speech-to-text with segment timestamps
+- **Multi-speaker diarization**: System audio speakers are automatically labeled (Speaker A, Speaker B, etc.) via OpenAI's diarization; mic input is attributed to your configured name via energy analysis
+- **OpenAI transcription**: Uses `gpt-4o-transcribe-diarize` with `diarized_json` for accurate speech-to-text with multi-speaker diarization
 - **Turn-based formatting**: Collapses consecutive segments from the same speaker into coherent turns
 - **Markdown output**: Generates timestamped, speaker-labeled transcripts
 - **Secure API key storage**: OpenAI API key stored in macOS Keychain
@@ -88,8 +88,8 @@ Scribe/
 
 1. **Recording**: Captures system audio via ScreenCaptureKit (M4A) and microphone via AVAudioEngine (CAF) simultaneously as separate files
 2. **Merging**: Combines mic and system audio into a single file for transcription
-3. **Transcription**: Sends merged audio to OpenAI Whisper API once, preserving full context for high-quality results
-4. **Attribution**: Analyzes energy levels in the original separate files to determine which source (mic or system) each transcribed segment came from
+3. **Transcription**: Sends merged audio to OpenAI's `gpt-4o-transcribe-diarize` API, which returns segments with speaker labels (A, B, C, etc.)
+4. **Attribution**: Analyzes energy levels in the original separate files to determine mic vs system source; mic segments get your name, system segments keep their diarized speaker labels
 5. **Formatting**: Collapses consecutive segments from the same speaker into turns, then outputs timestamped Markdown with speaker labels
 
 ## Why This Approach?

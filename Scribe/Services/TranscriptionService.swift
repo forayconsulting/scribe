@@ -60,11 +60,16 @@ actor TranscriptionService {
 
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"model\"\r\n\r\n".data(using: .utf8)!)
-        body.append("whisper-1\r\n".data(using: .utf8)!)
+        body.append("gpt-4o-transcribe-diarize\r\n".data(using: .utf8)!)
 
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"response_format\"\r\n\r\n".data(using: .utf8)!)
-        body.append("verbose_json\r\n".data(using: .utf8)!)
+        body.append("diarized_json\r\n".data(using: .utf8)!)
+
+        // Required for diarization model
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"chunking_strategy\"\r\n\r\n".data(using: .utf8)!)
+        body.append("auto\r\n".data(using: .utf8)!)
 
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)
 
@@ -83,8 +88,17 @@ actor TranscriptionService {
             throw TranscriptionError.httpError(httpResponse.statusCode)
         }
 
-        let apiResponse = try JSONDecoder().decode(TranscriptionResult.APIResponse.self, from: data)
-        return TranscriptionResult(from: apiResponse)
+        // Debug: log raw response if decode fails
+        do {
+            let apiResponse = try JSONDecoder().decode(TranscriptionResult.APIResponse.self, from: data)
+            return TranscriptionResult(from: apiResponse)
+        } catch {
+            // Write raw response to Desktop for debugging
+            let debugFile = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Desktop/scribe_api_response.json")
+            try? data.write(to: debugFile)
+            throw error
+        }
     }
 
     private func transcribeChunked(audioURL: URL, apiKey: String, progressHandler: @escaping @Sendable (Double, String) -> Void) async throws -> TranscriptionResult {
