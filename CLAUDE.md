@@ -11,8 +11,9 @@ swift build
 # Build release
 swift build -c release
 
-# Copy release binary to app bundle for manual testing
+# Copy release binary and icon to app bundle for manual testing
 cp .build/release/Scribe Scribe.app/Contents/MacOS/Scribe
+cp Scribe/Resources/AppIcon.icns Scribe.app/Contents/Resources/AppIcon.icns
 
 # Run app
 open Scribe.app
