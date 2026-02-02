@@ -16,20 +16,31 @@ struct MarkdownFormatter {
         output += "---\n\n"
         output += "## Transcript\n\n"
 
-        var speakerNames: [String: String] = [:]
+        // Map API speaker IDs to friendly names, but preserve user-configured names
+        var speakerIdToName: [String: String] = [:]
         var speakerCount = 0
 
         for segment in result.segments {
             let speakerLabel: String
 
             if let speaker = segment.speaker {
-                if let existingName = speakerNames[speaker] {
-                    speakerLabel = existingName
+                // Check if this looks like an API-generated ID (e.g., "speaker_0", "SPEAKER_00")
+                let isApiId = speaker.lowercased().hasPrefix("speaker_") ||
+                              speaker.lowercased().hasPrefix("spk_")
+
+                if isApiId {
+                    // Map API IDs to friendly "Speaker N" format
+                    if let existingName = speakerIdToName[speaker] {
+                        speakerLabel = existingName
+                    } else {
+                        speakerCount += 1
+                        let name = "Speaker \(speakerCount)"
+                        speakerIdToName[speaker] = name
+                        speakerLabel = name
+                    }
                 } else {
-                    speakerCount += 1
-                    let name = "Speaker \(speakerCount)"
-                    speakerNames[speaker] = name
-                    speakerLabel = name
+                    // Use the actual name directly (user-configured name)
+                    speakerLabel = speaker
                 }
             } else {
                 speakerLabel = "Speaker"

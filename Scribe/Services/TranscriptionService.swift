@@ -1,19 +1,43 @@
 import Foundation
 
+enum AudioSource {
+    case microphone(speakerName: String)
+    case systemAudio
+}
+
 actor TranscriptionService {
     private let apiEndpoint = URL(string: "https://api.openai.com/v1/audio/transcriptions")!
     private let maxFileSize: Int64 = 25 * 1024 * 1024
 
-    func transcribe(audioURL: URL, apiKey: String, progressHandler: @escaping @Sendable (Double, String) -> Void) async throws -> TranscriptionResult {
+    func transcribe(audioURL: URL, apiKey: String, source: AudioSource? = nil, progressHandler: @escaping @Sendable (Double, String) -> Void) async throws -> TranscriptionResult {
         let fileSize = try FileManager.default.attributesOfItem(atPath: audioURL.path)[.size] as? Int64 ?? 0
 
+        var result: TranscriptionResult
         if fileSize > maxFileSize {
-            return try await transcribeChunked(audioURL: audioURL, apiKey: apiKey, progressHandler: progressHandler)
+            result = try await transcribeChunked(audioURL: audioURL, apiKey: apiKey, progressHandler: progressHandler)
+        } else {
+            progressHandler(0.1, "Uploading audio...")
+            result = try await uploadAndTranscribe(audioURL: audioURL, apiKey: apiKey)
+            progressHandler(1.0, "Complete")
         }
 
-        progressHandler(0.1, "Uploading audio...")
-        let result = try await uploadAndTranscribe(audioURL: audioURL, apiKey: apiKey)
-        progressHandler(1.0, "Complete")
+        // Override speaker labels for microphone source
+        if case .microphone(let speakerName) = source {
+            result = TranscriptionResult(
+                text: result.text,
+                segments: result.segments.map { segment in
+                    TranscriptionSegment(
+                        id: segment.id,
+                        start: segment.start,
+                        end: segment.end,
+                        text: segment.text,
+                        speaker: speakerName
+                    )
+                },
+                language: result.language
+            )
+        }
+
         return result
     }
 

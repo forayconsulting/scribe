@@ -2,6 +2,11 @@ import AVFoundation
 import Foundation
 @preconcurrency import ScreenCaptureKit
 
+struct AudioCaptureResult {
+    let micAudioURL: URL?
+    let systemAudioURL: URL?
+}
+
 actor AudioCaptureService {
     private var stream: SCStream?
     private var streamOutput: AudioStreamOutput?
@@ -127,7 +132,7 @@ actor AudioCaptureService {
         self.micFile = audioFile
     }
 
-    func stopCapturing() async throws -> URL {
+    func stopCapturing() async throws -> AudioCaptureResult {
         guard isCapturing, let stream = stream, let writer = audioWriter else {
             throw AudioCaptureError.notCapturing
         }
@@ -148,41 +153,29 @@ actor AudioCaptureService {
         self.audioWriter = nil
         self.isCapturing = false
 
-        // Merge if we have both files
-        guard let finalURL = finalOutputURL else {
-            return sysURL
-        }
-
+        // Check if mic file is valid (exists and has content)
+        var validMicURL: URL? = nil
         if let micURL = micURL, FileManager.default.fileExists(atPath: micURL.path) {
             let micSize = (try? FileManager.default.attributesOfItem(atPath: micURL.path)[.size] as? Int64) ?? 0
             if micSize > 0 {
-                // Merge system and mic audio
-                let merger = AudioMerger()
-                do {
-                    try await merger.merge(
-                        systemAudioURL: sysURL,
-                        micAudioURL: micURL,
-                        outputURL: finalURL
-                    )
-
-                    // Clean up temp files
-                    try? FileManager.default.removeItem(at: sysURL)
-                    try? FileManager.default.removeItem(at: micURL)
-
-                    return finalURL
-                } catch {
-                    // If merge fails, fall back to system audio only
-                    print("Merge failed: \(error), using system audio only")
-                    try? FileManager.default.moveItem(at: sysURL, to: finalURL)
-                    try? FileManager.default.removeItem(at: micURL)
-                    return finalURL
-                }
+                validMicURL = micURL
+            } else {
+                try? FileManager.default.removeItem(at: micURL)
             }
         }
 
-        // No mic audio, just use system audio
-        try? FileManager.default.moveItem(at: sysURL, to: finalURL)
-        return finalURL
+        // Check if system file is valid
+        var validSysURL: URL? = nil
+        if FileManager.default.fileExists(atPath: sysURL.path) {
+            let sysSize = (try? FileManager.default.attributesOfItem(atPath: sysURL.path)[.size] as? Int64) ?? 0
+            if sysSize > 0 {
+                validSysURL = sysURL
+            } else {
+                try? FileManager.default.removeItem(at: sysURL)
+            }
+        }
+
+        return AudioCaptureResult(micAudioURL: validMicURL, systemAudioURL: validSysURL)
     }
 }
 

@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 struct SettingsView: View {
+    @AppStorage("micSpeakerName") private var micSpeakerName: String = "Me"
     @State private var apiKey: String = ""
     @State private var showKey: Bool = false
     @State private var isSaving: Bool = false
@@ -74,13 +75,24 @@ struct SettingsView: View {
             }
 
             Section {
+                TextField("Your Name", text: $micSpeakerName)
+                    .textFieldStyle(.roundedBorder)
+
+                Text("Your speech from the microphone will be labeled with this name in transcripts.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            } header: {
+                Text("Speaker Identity")
+            }
+
+            Section {
                 Link("Get an API key from OpenAI", destination: URL(string: "https://platform.openai.com/api-keys")!)
             } header: {
                 Text("Help")
             }
         }
         .formStyle(.grouped)
-        .frame(width: 450, height: 280)
+        .frame(width: 450, height: 360)
         .task {
             await loadAPIKey()
         }
