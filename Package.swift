@@ -17,6 +17,7 @@ let package = Package(
             sources: [
                 "ScribeApp.swift",
                 "Models/RecordingState.swift",
+                "Models/SpeakerRenameMapping.swift",
                 "Models/TranscriptionSegment.swift",
                 "Models/TranscriptionResult.swift",
                 "Services/AudioCaptureService.swift",
@@ -38,6 +39,7 @@ let package = Package(
                 "Views/RecordingView.swift",
                 "Views/ProcessingView.swift",
                 "Views/SettingsView.swift",
+                "Views/SpeakerRenamingView.swift",
                 "Views/Components/RecordButton.swift",
                 "Views/Components/PermissionBanner.swift"
             ],

@@ -20,6 +20,7 @@ final class RecordingViewModel {
 
     private var recordingTimer: Timer?
     private var captureResult: AudioCaptureResult?
+    private var pendingTranscription: TranscriptionResult?
 
     var recordingDuration: TimeInterval {
         guard case .recording(let startTime) = state else { return 0 }
@@ -239,16 +240,7 @@ final class RecordingViewModel {
                 )
             }
 
-            state = .processing(progress: 0.92, status: "Formatting...")
-
-            let markdown = markdownFormatter.format(transcription, meetingTitle: meetingTitle.isEmpty ? nil : meetingTitle)
-            let suggestedFilename = markdownFormatter.suggestFilename(for: meetingTitle.isEmpty ? nil : meetingTitle)
-
-            if let savedURL = await saveMarkdown(markdown, suggestedFilename: suggestedFilename) {
-                state = .complete(transcriptURL: savedURL)
-            } else {
-                state = .idle
-            }
+            state = .processing(progress: 0.92, status: "Preparing speaker renaming...")
 
             // Clean up temp files
             if let micURL = result.micAudioURL {
@@ -264,7 +256,10 @@ final class RecordingViewModel {
                 try? FileManager.default.removeItem(at: transcriptionURL)
             }
             captureResult = nil
-            meetingTitle = ""
+
+            // Store transcription and transition to speaker renaming
+            pendingTranscription = transcription
+            state = .renamingSpeakers(transcription: transcription)
 
         } catch {
             state = .error(message: "Transcription failed: \(error.localizedDescription)")
@@ -292,9 +287,67 @@ final class RecordingViewModel {
         }
     }
 
+    func finalizeSpeakerRenaming(with renames: [String: String]) async {
+        guard let transcription = pendingTranscription else {
+            state = .error(message: "No transcription to finalize")
+            return
+        }
+
+        // Apply renames to segments
+        let renamedSegments = transcription.segments.map { segment in
+            let originalSpeaker = segment.speaker ?? "Speaker"
+            let newSpeaker = renames[originalSpeaker] ?? originalSpeaker
+            return TranscriptionSegment(
+                id: segment.id,
+                start: segment.start,
+                end: segment.end,
+                text: segment.text,
+                speaker: newSpeaker
+            )
+        }
+
+        let renamedTranscription = TranscriptionResult(
+            text: transcription.text,
+            segments: renamedSegments,
+            language: transcription.language
+        )
+
+        let markdown = markdownFormatter.format(renamedTranscription, meetingTitle: meetingTitle.isEmpty ? nil : meetingTitle)
+        let suggestedFilename = markdownFormatter.suggestFilename(for: meetingTitle.isEmpty ? nil : meetingTitle)
+
+        if let savedURL = await saveMarkdown(markdown, suggestedFilename: suggestedFilename) {
+            state = .complete(transcriptURL: savedURL)
+        } else {
+            state = .idle
+        }
+
+        pendingTranscription = nil
+        meetingTitle = ""
+    }
+
+    func skipSpeakerRenaming() async {
+        guard let transcription = pendingTranscription else {
+            state = .error(message: "No transcription to finalize")
+            return
+        }
+
+        let markdown = markdownFormatter.format(transcription, meetingTitle: meetingTitle.isEmpty ? nil : meetingTitle)
+        let suggestedFilename = markdownFormatter.suggestFilename(for: meetingTitle.isEmpty ? nil : meetingTitle)
+
+        if let savedURL = await saveMarkdown(markdown, suggestedFilename: suggestedFilename) {
+            state = .complete(transcriptURL: savedURL)
+        } else {
+            state = .idle
+        }
+
+        pendingTranscription = nil
+        meetingTitle = ""
+    }
+
     func reset() {
         state = .idle
         meetingTitle = ""
+        pendingTranscription = nil
     }
 
     func openTranscript() {

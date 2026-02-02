@@ -1,6 +1,6 @@
 import Foundation
 
-struct TranscriptionResult: Codable {
+struct TranscriptionResult: Codable, Equatable {
     let text: String
     let segments: [TranscriptionSegment]
     let language: String?

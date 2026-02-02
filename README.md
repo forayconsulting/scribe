@@ -6,6 +6,7 @@ A simple macOS app for recording meetings and getting speaker-diarized transcrip
 
 - **Dual audio capture**: Records both system audio (via ScreenCaptureKit) and microphone simultaneously
 - **Multi-speaker diarization**: System audio speakers are automatically labeled (Speaker A, Speaker B, etc.) via OpenAI's diarization; mic input is attributed to your configured name via energy analysis
+- **Post-transcription speaker renaming**: After transcription, review and rename speakers before saving—see sample text from each speaker to identify who's who
 - **OpenAI transcription**: Uses `gpt-4o-transcribe-diarize` with `diarized_json` for accurate speech-to-text with multi-speaker diarization
 - **Turn-based formatting**: Collapses consecutive segments from the same speaker into coherent turns
 - **Markdown output**: Generates timestamped, speaker-labeled transcripts
@@ -28,7 +29,8 @@ A simple macOS app for recording meetings and getting speaker-diarized transcrip
 5. Click the record button to start capturing
 6. Click stop when done
 7. Wait for transcription to complete
-8. Your transcript opens automatically as a Markdown file
+8. Review the speaker renaming screen—edit names as needed or click "Skip" to keep defaults
+9. Save your transcript as a Markdown file
 
 ## Building
 
@@ -56,6 +58,7 @@ Scribe/
 │   ├── ContentView.swift        # Main window
 │   ├── RecordingView.swift      # Recording UI
 │   ├── ProcessingView.swift     # Transcription progress
+│   ├── SpeakerRenamingView.swift # Post-transcription speaker naming
 │   ├── SettingsView.swift       # API key configuration
 │   ├── MicTestView.swift        # Microphone testing utility
 │   └── Components/
@@ -80,6 +83,7 @@ Scribe/
 │   └── TranscriptionMerger.swift   # Legacy merger (unused)
 └── Models/
     ├── RecordingState.swift
+    ├── SpeakerRenameMapping.swift
     ├── TranscriptionResult.swift
     └── TranscriptionSegment.swift
 ```
@@ -90,7 +94,8 @@ Scribe/
 2. **Merging**: Combines mic and system audio into a single file for transcription
 3. **Transcription**: Sends merged audio to OpenAI's `gpt-4o-transcribe-diarize` API, which returns segments with speaker labels (A, B, C, etc.)
 4. **Attribution**: Analyzes energy levels in the original separate files to determine mic vs system source; mic segments get your name, system segments keep their diarized speaker labels
-5. **Formatting**: Collapses consecutive segments from the same speaker into turns, then outputs timestamped Markdown with speaker labels
+5. **Speaker Renaming**: Presents a UI showing all speakers with sample text; user can rename any speaker or skip to keep defaults
+6. **Formatting**: Collapses consecutive segments from the same speaker into turns, then outputs timestamped Markdown with speaker labels
 
 ## Why This Approach?
 

@@ -1,6 +1,6 @@
 import Foundation
 
-struct TranscriptionSegment: Codable, Identifiable {
+struct TranscriptionSegment: Codable, Identifiable, Equatable {
     let id: Int
     let start: Double
     let end: Double

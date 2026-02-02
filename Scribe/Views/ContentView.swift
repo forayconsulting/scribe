@@ -64,6 +64,21 @@ struct ContentView: View {
         case .processing(let progress, let status):
             ProcessingView(progress: progress, status: status)
 
+        case .renamingSpeakers(let transcription):
+            SpeakerRenamingView(
+                transcription: transcription,
+                onApply: { renames in
+                    Task {
+                        await viewModel.finalizeSpeakerRenaming(with: renames)
+                    }
+                },
+                onSkip: {
+                    Task {
+                        await viewModel.skipSpeakerRenaming()
+                    }
+                }
+            )
+
         case .complete(let transcriptURL):
             completeView(transcriptURL: transcriptURL)
 

@@ -4,6 +4,7 @@ enum RecordingState: Equatable {
     case idle
     case recording(startTime: Date)
     case processing(progress: Double, status: String)
+    case renamingSpeakers(transcription: TranscriptionResult)
     case complete(transcriptURL: URL)
     case error(message: String)
 
