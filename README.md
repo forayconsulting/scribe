@@ -111,4 +111,4 @@ The current approach (merge → transcribe once → attribute by energy) solves 
 
 ## License
 
-Private project.
+MIT License - see [LICENSE](LICENSE) for details.
