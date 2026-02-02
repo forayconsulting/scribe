@@ -5,8 +5,9 @@ A simple macOS app for recording meetings and getting speaker-diarized transcrip
 ## Features
 
 - **Dual audio capture**: Records both system audio (via ScreenCaptureKit) and microphone simultaneously
-- **Source-aware diarization**: Transcribes mic and system audio separately, labeling your speech with your configured name while remote speakers get OpenAI's diarization
-- **OpenAI transcription**: Uses `gpt-4o-transcribe` for accurate speech-to-text
+- **Energy-based speaker attribution**: Merges audio tracks for high-quality transcription, then attributes each segment to mic or system based on audio energy analysis
+- **OpenAI transcription**: Uses `whisper-1` with `verbose_json` for accurate speech-to-text with segment timestamps
+- **Turn-based formatting**: Collapses consecutive segments from the same speaker into coherent turns
 - **Markdown output**: Generates timestamped, speaker-labeled transcripts
 - **Secure API key storage**: OpenAI API key stored in macOS Keychain
 
@@ -26,7 +27,7 @@ A simple macOS app for recording meetings and getting speaker-diarized transcrip
 4. Grant Screen Recording and Microphone permissions when prompted
 5. Click the record button to start capturing
 6. Click stop when done
-7. Wait for transcription to complete (mic and system audio are transcribed separately)
+7. Wait for transcription to complete
 8. Your transcript opens automatically as a Markdown file
 
 ## Building
@@ -65,15 +66,18 @@ Scribe/
 ├── Services/
 │   ├── AudioCaptureService.swift      # System audio (ScreenCaptureKit)
 │   ├── MicrophoneCaptureService.swift # Microphone (AVCaptureSession)
-│   ├── AudioFileWriter.swift          # CAF file writing
+│   ├── AudioFileWriter.swift          # M4A file writing
 │   ├── TranscriptionService.swift     # OpenAI API integration
 │   └── KeychainService.swift          # Secure credential storage
 ├── Utilities/
-│   ├── AudioChunker.swift       # Splits audio for API limits
-│   ├── AudioConverter.swift     # Converts mic CAF to M4A for API
-│   ├── AudioMerger.swift        # Legacy audio merging (unused)
-│   ├── MarkdownFormatter.swift  # Transcript formatting
-│   └── TranscriptionMerger.swift # Merges mic + system transcripts
+│   ├── AudioChunker.swift         # Splits audio for API limits
+│   ├── AudioConverter.swift       # Converts mic CAF to M4A for API
+│   ├── AudioMerger.swift          # Merges mic + system into single file
+│   ├── AudioSourceAttributor.swift # Attributes segments by energy analysis
+│   ├── AudioRegionExtractor.swift  # Extracts time regions from audio
+│   ├── SpeechRegionDetector.swift  # Detects speech regions via energy
+│   ├── MarkdownFormatter.swift     # Transcript formatting with turn collapsing
+│   └── TranscriptionMerger.swift   # Legacy merger (unused)
 └── Models/
     ├── RecordingState.swift
     ├── TranscriptionResult.swift
@@ -83,10 +87,22 @@ Scribe/
 ## How It Works
 
 1. **Recording**: Captures system audio via ScreenCaptureKit (M4A) and microphone via AVAudioEngine (CAF) simultaneously as separate files
-2. **Conversion**: Converts microphone CAF to M4A for API compatibility
-3. **Transcription**: Sends each audio source to OpenAI separately—mic audio gets your configured speaker name, system audio uses OpenAI's diarization for remote speakers
-4. **Merging**: Combines both transcription results, sorting segments by timestamp
-5. **Formatting**: Converts merged results to timestamped Markdown with speaker labels
+2. **Merging**: Combines mic and system audio into a single file for transcription
+3. **Transcription**: Sends merged audio to OpenAI Whisper API once, preserving full context for high-quality results
+4. **Attribution**: Analyzes energy levels in the original separate files to determine which source (mic or system) each transcribed segment came from
+5. **Formatting**: Collapses consecutive segments from the same speaker into turns, then outputs timestamped Markdown with speaker labels
+
+## Why This Approach?
+
+Earlier iterations tried:
+- Transcribing mic and system separately, then merging by timestamp → timestamps didn't align (different file timelines)
+- Detecting speech regions and transcribing chunks → quality degraded without full context
+- Various offset calculations → Whisper's timestamp handling varies by content
+
+The current approach (merge → transcribe once → attribute by energy) solves all these issues:
+- **Full context**: Whisper sees complete audio, producing coherent transcription
+- **Accurate timing**: Single timeline, no alignment issues
+- **Reliable attribution**: Energy-based detection doesn't depend on Whisper's internal decisions
 
 ## License
 

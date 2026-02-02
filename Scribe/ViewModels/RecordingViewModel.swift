@@ -14,8 +14,9 @@ final class RecordingViewModel {
     private let audioCaptureService = AudioCaptureService()
     private let transcriptionService = TranscriptionService()
     private let markdownFormatter = MarkdownFormatter()
-    private let transcriptionMerger = TranscriptionMerger()
     private let audioConverter = AudioConverter()
+    private let audioMerger = AudioMerger()
+    private let sourceAttributor = AudioSourceAttributor()
 
     private var recordingTimer: Timer?
     private var captureResult: AudioCaptureResult?
@@ -110,7 +111,6 @@ final class RecordingViewModel {
             return
         }
 
-        // Debug: Log which audio files we have
         print("[Scribe Debug] Mic URL: \(result.micAudioURL?.path ?? "nil")")
         print("[Scribe Debug] System URL: \(result.systemAudioURL?.path ?? "nil")")
 
@@ -119,7 +119,7 @@ final class RecordingViewModel {
             return
         }
 
-        state = .processing(progress: 0, status: "Preparing...")
+        state = .processing(progress: 0, status: "Preparing audio...")
 
         do {
             guard let apiKey = try await KeychainService.shared.getAPIKey() else {
@@ -127,78 +127,121 @@ final class RecordingViewModel {
                 return
             }
 
-            // Get speaker name from settings
             let micSpeakerName = UserDefaults.standard.string(forKey: "micSpeakerName") ?? "Me"
-            print("[Scribe Debug] Mic speaker name from settings: '\(micSpeakerName)'")
+            let tempDir = FileManager.default.temporaryDirectory
 
-            var micTranscription: TranscriptionResult?
-            var systemTranscription: TranscriptionResult?
-
-            // Transcribe mic audio (0-45% progress)
+            // Convert mic audio to M4A if needed
+            var micM4AURL: URL? = nil
             if let micURL = result.micAudioURL {
-                state = .processing(progress: 0, status: "Converting microphone audio...")
-
-                // Convert CAF to M4A for API compatibility
-                let convertedMicURL = try await audioConverter.convertToM4A(inputURL: micURL)
-                print("[Scribe Debug] Converted mic audio to: \(convertedMicURL.path)")
-
-                state = .processing(progress: 0.05, status: "Transcribing microphone...")
-                micTranscription = try await transcriptionService.transcribe(
-                    audioURL: convertedMicURL,
-                    apiKey: apiKey,
-                    source: .microphone(speakerName: micSpeakerName),
-                    progressHandler: { [weak self] progress, status in
-                        Task { @MainActor in
-                            let scaledProgress = 0.05 + (progress * 0.40)
-                            self?.state = .processing(progress: scaledProgress, status: "Mic: \(status)")
-                        }
-                    }
-                )
-                print("[Scribe Debug] Mic transcription: \(micTranscription?.segments.count ?? 0) segments")
-                if let first = micTranscription?.segments.first {
-                    print("[Scribe Debug] First mic segment speaker: '\(first.speaker ?? "nil")'")
-                }
-
-                // Clean up converted file if different from original
-                if convertedMicURL != micURL {
-                    try? FileManager.default.removeItem(at: convertedMicURL)
-                }
+                state = .processing(progress: 0.05, status: "Converting microphone audio...")
+                micM4AURL = try await audioConverter.convertToM4A(inputURL: micURL)
             }
 
-            // Transcribe system audio (45-90% progress)
-            if let sysURL = result.systemAudioURL {
-                state = .processing(progress: 0.45, status: "Transcribing system audio...")
-                systemTranscription = try await transcriptionService.transcribe(
-                    audioURL: sysURL,
-                    apiKey: apiKey,
-                    source: .systemAudio,
-                    progressHandler: { [weak self] progress, status in
-                        Task { @MainActor in
-                            let scaledProgress = 0.45 + (progress * 0.45)
-                            self?.state = .processing(progress: scaledProgress, status: "System: \(status)")
-                        }
-                    }
+            let sysURL = result.systemAudioURL
+
+            // Determine what to transcribe
+            var transcriptionURL: URL
+            var needsAttribution = false
+
+            if let micURL = micM4AURL, let systemURL = sysURL {
+                // Both sources - merge them for single transcription
+                state = .processing(progress: 0.10, status: "Merging audio tracks...")
+                let mergedURL = tempDir.appendingPathComponent("merged_\(UUID().uuidString).m4a")
+                try await audioMerger.merge(
+                    systemAudioURL: systemURL,
+                    micAudioURL: micURL,
+                    outputURL: mergedURL
                 )
-                print("[Scribe Debug] System transcription: \(systemTranscription?.segments.count ?? 0) segments")
-                if let first = systemTranscription?.segments.first {
-                    print("[Scribe Debug] First system segment speaker: '\(first.speaker ?? "nil")'")
-                }
-            }
-
-            // Merge transcriptions (90-100% progress)
-            state = .processing(progress: 0.90, status: "Merging transcripts...")
-
-            guard let mergedResult = transcriptionMerger.merge(
-                micResult: micTranscription,
-                systemResult: systemTranscription
-            ) else {
-                state = .error(message: "Failed to merge transcription results")
+                transcriptionURL = mergedURL
+                needsAttribution = true
+                print("[Scribe Debug] Merged audio to: \(mergedURL.path)")
+            } else if let micURL = micM4AURL {
+                // Only mic
+                transcriptionURL = micURL
+            } else if let systemURL = sysURL {
+                // Only system
+                transcriptionURL = systemURL
+            } else {
+                state = .error(message: "No valid audio to transcribe")
                 return
             }
 
-            state = .processing(progress: 0.95, status: "Formatting...")
+            // Transcribe the (merged) audio file once - full quality
+            state = .processing(progress: 0.20, status: "Transcribing audio...")
+            var transcription = try await transcriptionService.transcribe(
+                audioURL: transcriptionURL,
+                apiKey: apiKey,
+                source: nil, // Don't set source yet - we'll attribute later
+                progressHandler: { [weak self] progress, status in
+                    Task { @MainActor in
+                        let scaledProgress = 0.20 + (progress * 0.60)
+                        self?.state = .processing(progress: scaledProgress, status: status)
+                    }
+                }
+            )
+            print("[Scribe Debug] Transcription complete: \(transcription.segments.count) segments")
 
-            let markdown = markdownFormatter.format(mergedResult, meetingTitle: meetingTitle.isEmpty ? nil : meetingTitle)
+            // Attribute segments to sources if we have both
+            if needsAttribution, let micURL = micM4AURL, let systemURL = sysURL {
+                state = .processing(progress: 0.85, status: "Analyzing audio sources...")
+
+                // Analyze energy levels in both original files
+                let micEnergy = try await sourceAttributor.analyzeEnergyLevels(url: micURL)
+                let sysEnergy = try await sourceAttributor.analyzeEnergyLevels(url: systemURL)
+
+                print("[Scribe Debug] Mic energy samples: \(micEnergy.count)")
+                print("[Scribe Debug] System energy samples: \(sysEnergy.count)")
+
+                // Attribute each segment based on which source had more energy
+                let attributedSegments = sourceAttributor.attributeSegments(
+                    segments: transcription.segments,
+                    micEnergyLevels: micEnergy,
+                    systemEnergyLevels: sysEnergy,
+                    micSpeakerName: micSpeakerName
+                )
+
+                transcription = TranscriptionResult(
+                    text: transcription.text,
+                    segments: attributedSegments,
+                    language: transcription.language
+                )
+            } else if micM4AURL != nil {
+                // Only mic - label all as mic speaker
+                let labeledSegments = transcription.segments.map { segment in
+                    TranscriptionSegment(
+                        id: segment.id,
+                        start: segment.start,
+                        end: segment.end,
+                        text: segment.text,
+                        speaker: micSpeakerName
+                    )
+                }
+                transcription = TranscriptionResult(
+                    text: transcription.text,
+                    segments: labeledSegments,
+                    language: transcription.language
+                )
+            } else {
+                // Only system - label all as Speaker
+                let labeledSegments = transcription.segments.map { segment in
+                    TranscriptionSegment(
+                        id: segment.id,
+                        start: segment.start,
+                        end: segment.end,
+                        text: segment.text,
+                        speaker: "Speaker"
+                    )
+                }
+                transcription = TranscriptionResult(
+                    text: transcription.text,
+                    segments: labeledSegments,
+                    language: transcription.language
+                )
+            }
+
+            state = .processing(progress: 0.92, status: "Formatting...")
+
+            let markdown = markdownFormatter.format(transcription, meetingTitle: meetingTitle.isEmpty ? nil : meetingTitle)
             let suggestedFilename = markdownFormatter.suggestFilename(for: meetingTitle.isEmpty ? nil : meetingTitle)
 
             if let savedURL = await saveMarkdown(markdown, suggestedFilename: suggestedFilename) {
@@ -211,8 +254,14 @@ final class RecordingViewModel {
             if let micURL = result.micAudioURL {
                 try? FileManager.default.removeItem(at: micURL)
             }
+            if let micM4A = micM4AURL, micM4A != result.micAudioURL {
+                try? FileManager.default.removeItem(at: micM4A)
+            }
             if let sysURL = result.systemAudioURL {
                 try? FileManager.default.removeItem(at: sysURL)
+            }
+            if transcriptionURL != micM4AURL && transcriptionURL != sysURL {
+                try? FileManager.default.removeItem(at: transcriptionURL)
             }
             captureResult = nil
             meetingTitle = ""

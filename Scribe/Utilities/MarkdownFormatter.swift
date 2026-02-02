@@ -16,14 +16,17 @@ struct MarkdownFormatter {
         output += "---\n\n"
         output += "## Transcript\n\n"
 
-        // Map API speaker IDs to friendly names, but preserve user-configured names
+        // Collapse consecutive segments from the same speaker into turns
+        let turns = collapseIntoTurns(segments: result.segments)
+
+        // Map API speaker IDs to friendly names
         var speakerIdToName: [String: String] = [:]
         var speakerCount = 0
 
-        for segment in result.segments {
+        for turn in turns {
             let speakerLabel: String
 
-            if let speaker = segment.speaker {
+            if let speaker = turn.speaker {
                 // Check if this looks like an API-generated ID (e.g., "speaker_0", "SPEAKER_00")
                 let isApiId = speaker.lowercased().hasPrefix("speaker_") ||
                               speaker.lowercased().hasPrefix("spk_")
@@ -46,13 +49,47 @@ struct MarkdownFormatter {
                 speakerLabel = "Speaker"
             }
 
-            output += "\(segment.formattedTimestamp) **\(speakerLabel):** \(segment.text)\n\n"
+            output += "\(turn.formattedTimestamp) **\(speakerLabel):** \(turn.text)\n\n"
         }
 
         output += "---\n\n"
         output += "*Transcribed with Scribe*\n"
 
         return output
+    }
+
+    /// Collapse consecutive segments from the same speaker into single turns
+    private func collapseIntoTurns(segments: [TranscriptionSegment]) -> [Turn] {
+        guard !segments.isEmpty else { return [] }
+
+        var turns: [Turn] = []
+        var currentTurn = Turn(
+            start: segments[0].start,
+            speaker: segments[0].speaker,
+            texts: [segments[0].text]
+        )
+
+        for i in 1..<segments.count {
+            let segment = segments[i]
+
+            if segment.speaker == currentTurn.speaker {
+                // Same speaker - append to current turn
+                currentTurn.texts.append(segment.text)
+            } else {
+                // Different speaker - save current turn and start new one
+                turns.append(currentTurn)
+                currentTurn = Turn(
+                    start: segment.start,
+                    speaker: segment.speaker,
+                    texts: [segment.text]
+                )
+            }
+        }
+
+        // Don't forget the last turn
+        turns.append(currentTurn)
+
+        return turns
     }
 
     func suggestFilename(for title: String?) -> String {
@@ -70,5 +107,23 @@ struct MarkdownFormatter {
         }
 
         return "\(dateString) - Meeting Transcript.md"
+    }
+}
+
+/// A turn represents one speaker's continuous speech (collapsed from multiple segments)
+private struct Turn {
+    let start: Double
+    let speaker: String?
+    var texts: [String]
+
+    var text: String {
+        texts.joined(separator: " ")
+    }
+
+    var formattedTimestamp: String {
+        let hours = Int(start) / 3600
+        let minutes = (Int(start) % 3600) / 60
+        let seconds = Int(start) % 60
+        return String(format: "[%02d:%02d:%02d]", hours, minutes, seconds)
     }
 }
