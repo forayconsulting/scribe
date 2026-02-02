@@ -9,7 +9,7 @@ struct ScribeApp: App {
         WindowGroup {
             ContentView()
         }
-        .windowResizability(.contentSize)
+        .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(after: .windowList) {
                 Button("Microphone Test") {

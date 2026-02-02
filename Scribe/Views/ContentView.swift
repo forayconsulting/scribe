@@ -2,7 +2,6 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var viewModel = RecordingViewModel()
-    @State private var showMicTest = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -13,12 +12,9 @@ struct ContentView: View {
             mainContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 400, height: 350)
+        .frame(minWidth: 400, minHeight: 350)
         .sheet(isPresented: $viewModel.showSettings) {
             settingsSheet
-        }
-        .sheet(isPresented: $showMicTest) {
-            MicTestView()
         }
         .onAppear {
             viewModel.checkPermissions()
@@ -33,14 +29,6 @@ struct ContentView: View {
                 .fontWeight(.semibold)
 
             Spacer()
-
-            Button {
-                showMicTest = true
-            } label: {
-                Image(systemName: "mic.badge.xmark")
-            }
-            .buttonStyle(.borderless)
-            .help("Test Microphone")
 
             Button {
                 viewModel.showSettings = true
