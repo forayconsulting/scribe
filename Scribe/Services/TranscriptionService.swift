@@ -9,6 +9,13 @@ actor TranscriptionService {
     private let apiEndpoint = URL(string: "https://api.openai.com/v1/audio/transcriptions")!
     private let maxFileSize: Int64 = 25 * 1024 * 1024
 
+    private lazy var session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 300  // 5 minutes for the request
+        config.timeoutIntervalForResource = 600 // 10 minutes total
+        return URLSession(configuration: config)
+    }()
+
     func transcribe(audioURL: URL, apiKey: String, source: AudioSource? = nil, progressHandler: @escaping @Sendable (Double, String) -> Void) async throws -> TranscriptionResult {
         let fileSize = try FileManager.default.attributesOfItem(atPath: audioURL.path)[.size] as? Int64 ?? 0
 
@@ -75,7 +82,7 @@ actor TranscriptionService {
 
         request.httpBody = body
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw TranscriptionError.invalidResponse
