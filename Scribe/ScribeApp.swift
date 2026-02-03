@@ -6,11 +6,17 @@ struct ScribeApp: App {
     @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
-        WindowGroup {
-            ContentView()
+        WindowGroup(for: RecordingSession.self) { $session in
+            ContentView(session: session ?? RecordingSession())
         }
         .windowResizability(.contentMinSize)
         .commands {
+            CommandGroup(after: .newItem) {
+                Button("New Recording Window") {
+                    openWindow(value: RecordingSession())
+                }
+                .keyboardShortcut("N", modifiers: [.command, .shift])
+            }
             CommandGroup(after: .windowList) {
                 Button("Microphone Test") {
                     openWindow(id: "mic-test")

@@ -16,6 +16,7 @@ let package = Package(
             exclude: ["Info.plist", "Scribe.entitlements"],
             sources: [
                 "ScribeApp.swift",
+                "Models/RecordingSession.swift",
                 "Models/RecordingState.swift",
                 "Models/SpeakerRenameMapping.swift",
                 "Models/TranscriptionSegment.swift",

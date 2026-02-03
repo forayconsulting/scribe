@@ -5,6 +5,7 @@ A simple macOS app for recording meetings and getting speaker-diarized transcrip
 ## Features
 
 - **Dual audio capture**: Records both system audio (via ScreenCaptureKit) and microphone simultaneously
+- **Multi-session support**: Start a new recording in a separate window while a previous transcription is still processing (Cmd+Shift+N)
 - **Multi-speaker diarization**: System audio speakers are automatically labeled (Speaker A, Speaker B, etc.) via OpenAI's diarization; mic input is attributed to your configured name via energy analysis
 - **Post-transcription speaker renaming**: After transcription, review and rename speakers before saving—see sample text from each speaker to identify who's who
 - **OpenAI transcription**: Uses `gpt-4o-transcribe-diarize` with `diarized_json` for accurate speech-to-text with multi-speaker diarization
@@ -82,6 +83,7 @@ Scribe/
 │   ├── MarkdownFormatter.swift     # Transcript formatting with turn collapsing
 │   └── TranscriptionMerger.swift   # Legacy merger (unused)
 └── Models/
+    ├── RecordingSession.swift       # Session identity for multi-window support
     ├── RecordingState.swift
     ├── SpeakerRenameMapping.swift
     ├── TranscriptionResult.swift

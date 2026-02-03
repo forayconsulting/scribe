@@ -1,7 +1,13 @@
 import SwiftUI
 
 struct ContentView: View {
+    let session: RecordingSession
     @State private var viewModel = RecordingViewModel()
+    @Environment(\.openWindow) private var openWindow
+
+    init(session: RecordingSession = RecordingSession()) {
+        self.session = session
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -21,6 +27,11 @@ struct ContentView: View {
         }
     }
 
+    private var isProcessing: Bool {
+        if case .processing = viewModel.state { return true }
+        return false
+    }
+
     @ViewBuilder
     private var headerView: some View {
         HStack {
@@ -29,6 +40,13 @@ struct ContentView: View {
                 .fontWeight(.semibold)
 
             Spacer()
+
+            if isProcessing {
+                Button("New Recording") {
+                    openWindow(value: RecordingSession())
+                }
+                .buttonStyle(.bordered)
+            }
 
             Button {
                 viewModel.showSettings = true
@@ -50,7 +68,9 @@ struct ContentView: View {
             RecordingView(viewModel: viewModel)
 
         case .processing(let progress, let status):
-            ProcessingView(progress: progress, status: status)
+            ProcessingView(progress: progress, status: status) {
+                openWindow(value: RecordingSession())
+            }
 
         case .renamingSpeakers(let transcription):
             SpeakerRenamingView(

@@ -3,6 +3,7 @@ import SwiftUI
 struct ProcessingView: View {
     let progress: Double
     let status: String
+    var onNewRecording: (() -> Void)?
 
     var body: some View {
         VStack(spacing: 24) {
@@ -21,6 +22,14 @@ struct ProcessingView: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
+
+            if let onNewRecording {
+                Button("Start New Recording") {
+                    onNewRecording()
+                }
+                .buttonStyle(.bordered)
+                .padding(.top, 8)
+            }
         }
         .padding()
     }
