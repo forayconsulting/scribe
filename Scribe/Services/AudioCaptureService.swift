@@ -141,12 +141,17 @@ actor AudioCaptureService {
         try await stream.stopCapture()
         let sysURL = try await writer.finishWriting()
 
-        // Stop mic audio
+        // Stop mic audio - remove tap first to stop writing
         micEngine?.inputNode.removeTap(onBus: 0)
         micEngine?.stop()
         let micURL = micFileURL
+
+        // Release the audio file to ensure it's properly closed and flushed
         micFile = nil
         micEngine = nil
+
+        // Give the file system a moment to flush the audio file
+        try await Task.sleep(for: .milliseconds(100))
 
         self.stream = nil
         self.streamOutput = nil

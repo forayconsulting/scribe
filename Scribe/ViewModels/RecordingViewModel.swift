@@ -112,9 +112,6 @@ final class RecordingViewModel {
             return
         }
 
-        print("[Scribe Debug] Mic URL: \(result.micAudioURL?.path ?? "nil")")
-        print("[Scribe Debug] System URL: \(result.systemAudioURL?.path ?? "nil")")
-
         guard result.micAudioURL != nil || result.systemAudioURL != nil else {
             state = .error(message: "No audio was captured")
             return
@@ -155,7 +152,6 @@ final class RecordingViewModel {
                 )
                 transcriptionURL = mergedURL
                 needsAttribution = true
-                print("[Scribe Debug] Merged audio to: \(mergedURL.path)")
             } else if let micURL = micM4AURL {
                 // Only mic
                 transcriptionURL = micURL
@@ -180,8 +176,6 @@ final class RecordingViewModel {
                     }
                 }
             )
-            print("[Scribe Debug] Transcription complete: \(transcription.segments.count) segments")
-
             // Attribute segments to sources if we have both
             if needsAttribution, let micURL = micM4AURL, let systemURL = sysURL {
                 state = .processing(progress: 0.85, status: "Analyzing audio sources...")
@@ -189,9 +183,6 @@ final class RecordingViewModel {
                 // Analyze energy levels in both original files
                 let micEnergy = try await sourceAttributor.analyzeEnergyLevels(url: micURL)
                 let sysEnergy = try await sourceAttributor.analyzeEnergyLevels(url: systemURL)
-
-                print("[Scribe Debug] Mic energy samples: \(micEnergy.count)")
-                print("[Scribe Debug] System energy samples: \(sysEnergy.count)")
 
                 // Attribute each segment based on which source had more energy
                 let attributedSegments = sourceAttributor.attributeSegments(
